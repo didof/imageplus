@@ -27,6 +27,8 @@ yargs
     output: string;
     sizes: string[];
     formats: Formats[];
+    lazy: boolean;
+    async: boolean;
   }>(
     "$0",
     "Image Generator CLI",
@@ -65,6 +67,18 @@ yargs
               .map((format) => <Formats>format)
               .sort((a, b) => (levels[b] || 0) - (levels[a] || 0));
           },
+        })
+        .option("lazy", {
+          describe:
+            "Instruct the browser to only start fetching the image as it gets closer to the view",
+          type: "boolean",
+          default: true,
+        })
+        .option("async", {
+          describe:
+            "Instruct the browser to decode the image off the main thread",
+          type: "boolean",
+          default: true,
         });
     },
     async (argv) => {
@@ -73,7 +87,9 @@ yargs
         argv.alt,
         argv.output,
         argv.sizes,
-        argv.formats
+        argv.formats,
+        argv.lazy,
+        argv.async
       );
     }
   )
@@ -84,7 +100,9 @@ async function generateImages(
   alt: string,
   outputDir: string,
   sizes: string[],
-  formats: Formats[]
+  formats: Formats[],
+  lazy: boolean,
+  async: boolean
 ): Promise<void> {
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -136,7 +154,9 @@ async function generateImages(
 
   const htmlContent = `<picture>
       ${sourceTags.join("\n  ")}
-      <img src="${fallbackPath}" alt="${alt}" />
+      <img src="${fallbackPath}" alt="${alt}" ${lazy ? 'loading="lazy"' : ""} ${
+    async ? 'decoding="async"' : ""
+  }/>
     </picture>`;
 
   const htmlFilePath = path.join(outputDir, `${imageName}.html`);
