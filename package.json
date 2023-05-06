@@ -26,6 +26,7 @@
   "author": "didof <didonato.fr@gmail.com>",
   "license": "MIT",
   "devDependencies": {
+    "@types/yargs": "^17.0.24",
     "@vitest/coverage-c8": "^0.28.4",
     "ts-node": "^10.9.1",
     "tsup": "^6.5.0",
@@ -34,5 +35,9 @@
   },
   "publishConfig": {
     "assess": "public"
+  },
+  "dependencies": {
+    "sharp": "^0.32.1",
+    "yargs": "^17.7.2"
   }
 }
