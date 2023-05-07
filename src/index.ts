@@ -105,6 +105,22 @@ yargs
   )
   .parse();
 
+type NullError = Error | null;
+
+function assertDirExists(path: string): NullError {
+  const stats = fs.statSync(path);
+
+  if (!stats.isDirectory()) {
+    return new Error(`path '${path}' already exists and is not a directory`);
+  }
+
+  if (!fs.existsSync(path)) {
+    fs.mkdirSync(path, { recursive: true });
+  }
+
+  return null;
+}
+
 async function generateImages(
   imagePath: string,
   alt: string,
@@ -114,9 +130,10 @@ async function generateImages(
   lazy: boolean,
   async: boolean,
   LQIP: boolean
-): Promise<void> {
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+): Promise<NullError> {
+  var err: NullError;
+  if ((err = assertDirExists(outputDir))) {
+    return err;
   }
 
   const promises: (() => ReturnType<typeof generate>)[] = [];
@@ -135,10 +152,9 @@ async function generateImages(
 
   for (const result of results) {
     if (result.status === "rejected") {
-      console.error(
+      return new Error(
         `could not generate ${result.reason.output.path}: ${result.reason.error}`
       );
-      return;
     }
 
     const { type } = result.value.output;
@@ -177,6 +193,8 @@ async function generateImages(
 
   const htmlFilePath = path.join(outputDir, `${imageName}.html`);
   fs.writeFileSync(htmlFilePath, html);
+
+  return null;
 }
 
 type GenerateInput = {
