@@ -4,6 +4,9 @@ import yargs from "yargs";
 import sharp, { FormatEnum } from "sharp";
 import path from "path";
 import fs from "fs";
+import { Source } from "./Source";
+import { Img, ImgDecoding, ImgLoading } from "./Img";
+import { Picture } from "./Picture";
 
 enum Formats {
   Avif = "avif",
@@ -29,6 +32,7 @@ yargs
     formats: Formats[];
     lazy: boolean;
     async: boolean;
+    LQIP: boolean;
   }>(
     "$0",
     "Image Generator CLI",
@@ -52,7 +56,7 @@ yargs
         .option("sizes", {
           describe: "Comma-separated list of sizes",
           type: "string",
-          default: "240,380,640,1180,1280,1920",
+          default: "240,380,640,860,1280,1920",
           coerce(arg: string): string[] {
             return arg.split(",");
           },
@@ -79,6 +83,11 @@ yargs
             "Instruct the browser to decode the image off the main thread",
           type: "boolean",
           default: true,
+        })
+        .option("LQIP", {
+          describe: "Generate the 20 pixels wide Low Quality Image Placeholder",
+          type: "boolean",
+          default: true,
         });
     },
     async (argv) => {
@@ -89,7 +98,8 @@ yargs
         argv.sizes,
         argv.formats,
         argv.lazy,
-        argv.async
+        argv.async,
+        argv.LQIP
       );
     }
   )
@@ -102,7 +112,8 @@ async function generateImages(
   sizes: string[],
   formats: Formats[],
   lazy: boolean,
-  async: boolean
+  async: boolean,
+  LQIP: boolean
 ): Promise<void> {
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -136,33 +147,36 @@ async function generateImages(
     grouped.set(type, srcsetList);
   }
 
-  const sourceTags: string[] = [];
+  const sources: Source[] = [];
   for (let [type, srcsetList] of grouped.entries()) {
-    const sourceTag = `<source
-    sizes="(max-width: ${sizes[sizes.length - 1]}px) 100vw, ${
-      sizes[sizes.length - 1]
-    }px"
-    srcset="${srcsetList.join(", ")}"
-    type="${type}"
-  />`;
-    sourceTags.push(sourceTag);
+    const source = new Source(type)
+      .addSrcsets(...srcsetList)
+      .setMaxWidth(sizes.at(sizes.length - 1)!);
+    sources.push(source);
   }
 
   const imageName = path.basename(imagePath, path.extname(imagePath));
   const fallbackPath = path.join(outputDir, path.basename(imagePath));
   await copyImage(imagePath, fallbackPath);
 
-  const htmlContent = `<picture>
-      ${sourceTags.join("\n  ")}
-      <img src="${fallbackPath}" alt="${alt}" ${lazy ? 'loading="lazy"' : ""} ${
-    async ? 'decoding="async"' : ""
-  }/>
-    </picture>`;
+  // TODO add to style: "content-visibility: auto;"
+  // TODO add to style: "max-width: 100%; height: auto;"
+
+  const img = Img.fromImagePath(imagePath, outputDir, alt);
+  if (lazy) {
+    img.setLoading(ImgLoading.Lazy);
+  }
+  if (async) {
+    img.setDeconding(ImgDecoding.Async);
+  }
+  if (LQIP) {
+    await img.useLQIP();
+  }
+
+  const html = new Picture(img).addSources(...sources).toString();
 
   const htmlFilePath = path.join(outputDir, `${imageName}.html`);
-  fs.writeFileSync(htmlFilePath, htmlContent);
-
-  console.log(`Generated HTML file: ${htmlFilePath}`);
+  fs.writeFileSync(htmlFilePath, html);
 }
 
 type GenerateInput = {
@@ -212,5 +226,27 @@ async function copyImage(
       }
       resolve(void 0);
     });
+  });
+}
+
+async function createLQIP(imagePath: string): Promise<{
+  background: string;
+  ["background-size"]: string;
+  ["background-repeat"]: string;
+}> {
+  return new Promise((resolve, reject) => {
+    // TODO handle error, wrap sharp in custom Promise system
+    sharp(imagePath)
+      .resize(20)
+      .toFormat("jpg")
+      .toBuffer()
+      .then((buffer) => buffer.toString("base64"))
+      .then((base64String) =>
+        resolve({
+          background: `url(data:image/jpeg;base64,${base64String})`,
+          "background-size": "cover",
+          "background-repeat": "no-repeat",
+        })
+      );
   });
 }
