@@ -13,8 +13,8 @@ export class Picture {
   }
 
   public toString(): string {
-    return `<picture>${this.sources.map((source) =>
-      source.toString()
-    )}${this.img.toString()}</picture>`;
+    return `<picture>${this.sources
+      .map((source) => source.toString())
+      .join("")}${this.img.toString()}</picture>`;
   }
 }
